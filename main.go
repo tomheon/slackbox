@@ -1,21 +1,51 @@
 package main
 
 import (
+	"flag"
 	"fmt"
+	"log"
 	"io/ioutil"
+	"os"
 	"strings"
 
 	"github.com/nlopes/slack"
-)
+) 
+
+func mustHaveToken(tokenFile string) string {
+	info, err := os.Stat(tokenFile)
+	if err != nil {
+		log.Fatalf("Error stating tokenfile %s %s", tokenFile, err)
+	}
+
+	if (info.Mode().Perm() & 0077) != 0 {
+		log.Fatalf("Tokenfile %s is accessible to group or world with perms %s, exiting...", tokenFile, info.Mode().Perm())
+	}
+	
+    dat, err := ioutil.ReadFile(tokenFile)
+	if err != nil {
+		log.Fatalf("Error reading tokenfile %s %s", tokenFile, err)
+	}
+	
+	return strings.TrimSpace(string(dat))
+}
+
+func mustAuth(token string) *slack.Client {
+	api := slack.New(token)
+
+	_, err := api.AuthTest()
+	if err != nil {
+		log.Fatalf("Erroring authing to slack: %s", err)
+	}
+
+	return api
+}
 
 func main() {
-	// todo make this a param, check perms, fail if can be read by anyone but owner
-    dat, _ := ioutil.ReadFile("/root/creds.txt")
-	token := strings.TrimSpace(string(dat))
+	tokenFile := flag.String("tokenfile", "tokenfile.txt", "The file containing your slack token")
+	flag.Parse()
 
-	api := slack.New(token)
-	// resp, err := api.AuthTest()
-	// fmt.Println("hello %s %s", resp, err)
+	token := mustHaveToken(*tokenFile)
+	api := mustAuth(token)
 
 	// channels, err := api.GetChannels(false)
 	// if err != nil {
