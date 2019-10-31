@@ -2,77 +2,66 @@ package main
 
 import (
 	"flag"
-	"fmt"
-	"log"
 	"io/ioutil"
+	"log"
 	"os"
 	"strings"
+)
 
-	"github.com/nlopes/slack"
-) 
-
-func mustHaveToken(tokenFile string) string {
-	info, err := os.Stat(tokenFile)
+func mustHaveToken(tokenPath string) string {
+	info, err := os.Stat(tokenPath)
 	if err != nil {
-		log.Fatalf("Error stating tokenfile %s %s", tokenFile, err)
+		log.Fatalf("Error stating tokenpath %s %s", tokenPath, err)
 	}
 
 	if (info.Mode().Perm() & 0077) != 0 {
-		log.Fatalf("Tokenfile %s is accessible to group or world with perms %s, exiting...", tokenFile, info.Mode().Perm())
+		log.Fatalf("Tokenpath %s is accessible to group or world with perms %s, exiting...", tokenPath, info.Mode().Perm())
 	}
-	
-    dat, err := ioutil.ReadFile(tokenFile)
+
+	dat, err := ioutil.ReadFile(tokenPath)
 	if err != nil {
-		log.Fatalf("Error reading tokenfile %s %s", tokenFile, err)
+		log.Fatalf("Error reading tokenpath %s %s", tokenPath, err)
 	}
-	
+
 	return strings.TrimSpace(string(dat))
 }
 
-func mustAuth(token string) *slack.Client {
-	api := slack.New(token)
+func mustConnectAPI(token string) *SlackBoxAPI {
+	api, err := ConnectAPI(token)
 
-	_, err := api.AuthTest()
 	if err != nil {
-		log.Fatalf("Erroring authing to slack: %s", err)
+		log.Fatalf("Erroring connecting to slack: %s", err)
 	}
 
 	return api
 }
 
+func mustConnectDB(dbPath string) *SlackBoxDB {
+	db, err := ConnectDB(dbPath)
+
+	if err != nil {
+		log.Fatalf("Erroring connect to db at %s: %s", dbPath, err)
+	}
+
+	return db
+}
+
 func main() {
-	tokenFile := flag.String("tokenfile", "tokenfile.txt", "The file containing your slack token")
+	tokenPath := flag.String("tokenpath", "tokenfile.txt", "The path containing your slack token")
+	dbPath := flag.String("dbpath", "slackbox.db", "The path to the message db")
 	flag.Parse()
 
-	token := mustHaveToken(*tokenFile)
-	api := mustAuth(token)
+	token := mustHaveToken(*tokenPath)
+	api := mustConnectAPI(token)
+	db := mustConnectDB(*dbPath)
 
-	// channels, err := api.GetChannels(false)
-	// if err != nil {
-	// 	fmt.Printf("%s\n", err)
-	// 	return
-	// }
-	// for _, channel := range channels {
-	// 	fmt.Println(channel.Name)
-	// 	// channel is of type conversation & groupConversation
-	// 	// see all available methods in `conversation.go`
-	// }
+	conversations, err := api.FetchConversations()
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	// ims, err := api.GetIMChannels()
-	// if err != nil {
-	// 	fmt.Printf("%s\n", err)
-	// 	return
-	// }
-
-	// latest appears to be not set
-	// for _, im := range ims {
-	// 	fmt.Println(im.Latest)
-		// channel is of type conversation & groupConversation
-		// see all available methods in `conversation.go`
-		hist, _ := api.GetIMHistory("DFUBKMT7V", slack.NewHistoryParameters())
-		for _, msg := range hist.Messages {
-			fmt.Println(msg.Timestamp)
-		}
-	
-	
+	err = db.UpdateConversations(conversations)
+	if err != nil {
+		log.Fatal(err)
+	}
 }
