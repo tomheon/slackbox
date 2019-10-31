@@ -9,8 +9,8 @@ type SlackBoxAPI struct {
 }
 
 type Conversation struct {
-	ConversationType string
 	ID               string
+	ConversationType string
 	DisplayName      string
 	LatestMsgTs      string
 }
