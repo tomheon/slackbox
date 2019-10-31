@@ -2,13 +2,21 @@ package main
 
 import (
 	"database/sql"
-	"errors"
 	"fmt"
 
 	_ "github.com/mattn/go-sqlite3"
 )
 
 const SupportedDBVersion = 1
+
+type unsupportedVersionError struct {
+	supportedVersion int
+	actualVersion    int
+}
+
+func (e *unsupportedVersionError) Error() string {
+	return fmt.Sprintf("Actual version %d, supported version %d", e.actualVersion, e.supportedVersion)
+}
 
 // Simple struct to hide the sqlite3 details.
 type SlackBoxDB struct {
@@ -102,7 +110,7 @@ func checkSupportedVersion(db *sql.DB) error {
 		}
 
 		if version > SupportedDBVersion {
-			return errors.New(fmt.Sprintf("Found unsupported DB version %d, only support %d", version, SupportedDBVersion))
+			return &unsupportedVersionError{actualVersion: version, supportedVersion: SupportedDBVersion}
 		}
 	}
 
