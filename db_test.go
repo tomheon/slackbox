@@ -85,7 +85,62 @@ func TestUpdateConversationNew(t *testing.T) {
 	}
 }
 
-// TODO test update existing with later ts
+func TestUpdateConversationLater(t *testing.T) {
+	tempfile, err := ioutil.TempFile("", "")
+	if err != nil {
+		t.Fatalf("Could not create tempfile %s", err)
+	}
+
+	defer os.Remove(tempfile.Name())
+
+	db, err := ConnectDB(tempfile.Name())
+	c := Conversation{ID: "someconvo", ConversationType: "im", DisplayName: "display", LatestMsgTs: "1.0000"}
+	err = db.UpdateConversation(c)
+	if err != nil {
+		t.Errorf("Error trying to update conversation %s", err)
+	}
+
+	foundC, found, err := db.GetConversation(c.ID)
+	if !found {
+		t.Error("Couldn't find conversation post update")
+	}
+	if err != nil {
+		t.Errorf("Error trying to find conversation %s", err)
+	}
+	if !reflect.DeepEqual(c, foundC) {
+		t.Errorf("Expected to find conversation %s, found %s", c, foundC)
+	}
+
+	c2 := Conversation{ID: "someconvo", ConversationType: "channel", DisplayName: "display2", LatestMsgTs: "2.0000"}
+
+	err = db.UpdateConversation(c2)
+	if err != nil {
+		t.Errorf("Error trying to update conversation %s", err)
+	}
+
+	foundC, found, err = db.GetConversation(c.ID)
+
+	if !found {
+		t.Error("Couldn't find conversation post update")
+	}
+
+	if err != nil {
+		t.Errorf("Error trying to find conversation %s", err)
+	}
+
+	if c2.LatestMsgTs != foundC.LatestMsgTs {
+		t.Errorf("Didn't update timestamp %s %s", c2, foundC)
+	}
+
+	if c2.DisplayName != foundC.DisplayName {
+		t.Errorf("didn't update displayname %s %s", c2, foundC)
+	}
+
+	if c2.ConversationType == foundC.ConversationType {
+		t.Errorf("mistakenly updated conversation type %s %s", c2, foundC)
+	}
+}
+
 // TODO test update existing with same ts
 // TODO test update existing with earlier ts
 // TODO test updateconversations
