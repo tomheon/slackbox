@@ -23,10 +23,34 @@ func ConnectAPI(token string) (*SlackBoxAPI, error) {
 	return &SlackBoxAPI{api}, err
 }
 
+func (api *SlackBoxAPI) recursiveFetchConversations(types []string) ([]slack.Channel, error) {
+	ims := make([]slack.Channel, 0)
+	params := &slack.GetConversationsParameters{Types: types}
+
+	for {
+		newIms, nextCursor, err := api.client.GetConversations(params)
+
+		if err != nil {
+			return ims, err
+		}
+
+		ims = append(ims, newIms...)
+
+		if nextCursor == "" {
+			break
+		}
+
+		params.Cursor = nextCursor
+	}
+
+	return ims, nil
+}
+
 func (api *SlackBoxAPI) FetchConversations() ([]Conversation, error) {
 	conversations := make([]Conversation, 0)
 
-	ims, err := api.client.GetIMChannels()
+	ims, err := api.recursiveFetchConversations([]string{"im"})
+
 	if err != nil {
 		return nil, err
 	}
@@ -60,12 +84,14 @@ func (api *SlackBoxAPI) imToConversation(imID string, imUser string) (Conversati
 
 	convo.DisplayName = userName
 
-	hist, err := api.client.GetIMHistory(imID, slack.NewHistoryParameters())
+	params := &slack.GetConversationHistoryParameters{ChannelID: imID}
+	history, err := api.client.GetConversationHistory(params)
+
 	if err != nil {
 		return convo, err
 	}
 
-	for _, msg := range hist.Messages {
+	for _, msg := range history.Messages {
 		if msg.Timestamp > convo.LatestMsgTs {
 			convo.LatestMsgTs = msg.Timestamp
 		}
