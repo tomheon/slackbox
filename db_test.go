@@ -3,6 +3,7 @@ package main
 import (
 	"io/ioutil"
 	"os"
+	"reflect"
 	"testing"
 )
 
@@ -47,3 +48,44 @@ func TestErrOnUnsupportedVersion(t *testing.T) {
 		t.Errorf("Expected version error, got %s", err)
 	}
 }
+
+func TestUpdateConversationNew(t *testing.T) {
+	tempfile, err := ioutil.TempFile("", "")
+	if err != nil {
+		t.Fatalf("Could not create tempfile %s", err)
+	}
+
+	defer os.Remove(tempfile.Name())
+
+	db, err := ConnectDB(tempfile.Name())
+	c := Conversation{ID: "someconvo", ConversationType: "im", DisplayName: "display", LatestMsgTs: "1.0000"}
+
+	_, found, err := db.GetConversation(c.ID)
+	if found {
+		t.Fatal("Found conversation before it existed")
+	}
+	if err != nil {
+		t.Fatalf("Error trying to find conversation %s", err)
+	}
+
+	err = db.UpdateConversation(c)
+	if err != nil {
+		t.Errorf("Error trying to update conversation %s", err)
+	}
+
+	foundC, found, err := db.GetConversation(c.ID)
+	if !found {
+		t.Error("Couldn't find conversation post update")
+	}
+	if err != nil {
+		t.Errorf("Error trying to find conversation %s", err)
+	}
+	if !reflect.DeepEqual(c, foundC) {
+		t.Errorf("Expected to find conversation %s, found %s", c, foundC)
+	}
+}
+
+// TODO test update existing with later ts
+// TODO test update existing with same ts
+// TODO test update existing with earlier ts
+// TODO test updateconversations

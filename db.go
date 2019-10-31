@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -59,6 +60,48 @@ func (db *SlackBoxDB) UpdateConversations(conversations []Conversation) error {
 	}
 
 	return nil
+}
+
+func (db *SlackBoxDB) GetConversation(conversationID string) (Conversation, bool, error) {
+	c := Conversation{}
+
+	query := `
+    select 
+      id, conversation_type, display_name, latest_msg_ts
+    from
+      conversations
+    where
+      id = ? 
+    `
+	rows, err := db.db.Query(query, conversationID)
+	if err != nil {
+		return c, false, err
+	}
+
+	defer rows.Close()
+
+	found := rows.Next()
+	if !found {
+		return c, false, nil
+	}
+
+	err = rows.Scan(&c.ID, &c.ConversationType, &c.DisplayName, &c.LatestMsgTs)
+	if err != nil {
+		return c, false, err
+	}
+
+	found = rows.Next()
+	if found {
+		return c, false, errors.New("Found duplicate conversation id")
+	}
+
+	err = rows.Err()
+	if err != nil {
+		return c, false, err
+	}
+
+	return c, true, nil
+
 }
 
 func ConnectDB(dbPath string) (*SlackBoxDB, error) {
