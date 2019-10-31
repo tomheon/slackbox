@@ -2,9 +2,13 @@ package main
 
 import (
 	"database/sql"
+	"errors"
+	"fmt"
 
 	_ "github.com/mattn/go-sqlite3"
 )
+
+const SupportedDBVersion = 1
 
 // Simple struct to hide the sqlite3 details.
 type SlackBoxDB struct {
@@ -63,9 +67,61 @@ func ConnectDB(dbPath string) (*SlackBoxDB, error) {
 	return &SlackBoxDB{db}, nil
 }
 
+func checkSupportedVersion(db *sql.DB) error {
+	initVersionSql := `
+      create table if not exists version (
+        -- singleton should always be 1, regardless of the version,
+        -- and lets us maintain a single version row
+        singleton int not null primary key,
+        version int not null
+      );
+
+      insert into version (singleton, version)
+      values (1, 1)
+      on conflict(singleton) do nothing;
+    `
+
+	_, err := db.Exec(initVersionSql)
+
+	if err != nil {
+		return err
+	}
+
+	rows, err := db.Query("select version from version")
+	if err != nil {
+		return err
+	}
+
+	defer rows.Close()
+
+	for rows.Next() {
+		var version int
+		err = rows.Scan(&version)
+		if err != nil {
+			return err
+		}
+
+		if version > SupportedDBVersion {
+			return errors.New(fmt.Sprintf("Found unsupported DB version %d, only support %d", version, SupportedDBVersion))
+		}
+	}
+
+	err = rows.Err()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // Initialize the db, creating the schema if necessary.  This function is
 // idempotent, and a db may be safely initialized multiple times..
 func initialize(db *sql.DB) error {
+	err := checkSupportedVersion(db)
+	if err != nil {
+		return err
+	}
+
 	schemaSql := `
       -- the list of conversations we're tracking
       create table if not exists conversations (
@@ -90,6 +146,6 @@ func initialize(db *sql.DB) error {
       create index if not exists ack_convo_idx on acknowledgements (
         conversation_id, acknowledged_through_ts);
 	`
-	_, err := db.Exec(schemaSql)
+	_, err = db.Exec(schemaSql)
 	return err
 }
