@@ -114,7 +114,20 @@ func (db *SlackBoxDB) GetConversation(conversationID string) (Conversation, bool
 	}
 
 	return c, true, nil
+}
 
+func (db *SlackBoxDB) AckConversation(id string, ackTs string) error {
+	// TODO trim the acks as part of this
+	sql := `
+      insert into acknowledgements
+        (conversation_id, acknowledged_through_ts)
+      values
+        (?,               ?)
+      on conflict(conversation_id, acknowledged_through_ts) do nothing
+    `
+
+	_, err := db.db.Exec(sql, id, ackTs)
+	return err
 }
 
 func ConnectDB(dbPath string) (*SlackBoxDB, error) {
@@ -265,7 +278,7 @@ func initialize(db *sql.DB) error {
         acknowledged_at int
       );
 
-      create index if not exists ack_convo_idx on acknowledgements (
+      create unique index if not exists ack_convo_idx on acknowledgements (
         conversation_id, acknowledged_through_ts);
 	`
 	_, err = db.Exec(schemaSql)

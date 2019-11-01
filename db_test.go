@@ -184,3 +184,71 @@ func TestUpdateConversations(t *testing.T) {
 		t.Errorf("Expected to find conversation %s, found %s", c2, foundC2)
 	}
 }
+
+func TestAckingConversation(t *testing.T) {
+	ts1 := "1.0"
+	ts2 := "2.0"
+
+	c := Conversation{ID: "someconvo", ConversationType: "im", DisplayName: "display", LatestMsgTs: ts1}
+	c2 := Conversation{ID: "someconvo2", ConversationType: "im", DisplayName: "display2", LatestMsgTs: ts1}
+
+	db := memoryDB(t)
+	checkUnacked(t, db, []Conversation{})
+
+	checkUpdate(t, db, c)
+	checkUpdate(t, db, c2)
+	checkUnacked(t, db, []Conversation{c, c2})
+
+	checkAck(t, db, c.ID, ts1)
+	checkUnacked(t, db, []Conversation{c2})
+
+	checkAck(t, db, c.ID, ts2)
+	checkUnacked(t, db, []Conversation{c2})
+
+	checkAck(t, db, c2.ID, ts1)
+	checkUnacked(t, db, []Conversation{})
+
+	c2.LatestMsgTs = ts2
+	checkUpdate(t, db, c2)
+	checkUnacked(t, db, []Conversation{c2})
+}
+
+func checkAck(t *testing.T, db *SlackBoxDB, id string, ts string) {
+	err := db.AckConversation(id, ts)
+	if err != nil {
+		t.Errorf("AckConversation failed with error %s", err)
+	}
+}
+
+func checkUnacked(t *testing.T, db *SlackBoxDB, conversations []Conversation) {
+	unacked, err := db.GetUnackedConversations()
+	if err != nil {
+		t.Errorf("GetUnackedConversations failed with error %s", err)
+	}
+
+	if len(unacked) != len(conversations) {
+		t.Errorf("Excpected %d conversations, got %d", len(conversations), len(unacked))
+	}
+
+	for i, _ := range conversations {
+		checkConversations(t, conversations[i], unacked[i])
+	}
+}
+
+func checkConversations(t *testing.T, expected Conversation, actual AcknowledgedConversation) {
+	if expected.ID != actual.ID {
+		t.Errorf("Excpected conversation id %s, got %s", expected.ID, actual.ID)
+	}
+
+	if expected.ConversationType != actual.ConversationType {
+		t.Errorf("Excpected conversation type %s, got %s", expected.ConversationType, actual.ConversationType)
+	}
+
+	if expected.DisplayName != actual.DisplayName {
+		t.Errorf("Excpected conversation displayname %s, got %s", expected.DisplayName, actual.DisplayName)
+	}
+
+	if expected.LatestMsgTs != actual.LatestMsgTs {
+		t.Errorf("Excpected latestmsgts %s, got %s", expected.LatestMsgTs, actual.LatestMsgTs)
+	}
+}
