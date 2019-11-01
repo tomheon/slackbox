@@ -10,6 +10,19 @@ import (
 
 const SupportedDBVersion = 1
 
+type AcknowledgedConversation struct {
+	Conversation
+	AcknowledgedThroughTs string
+}
+
+func (a *AcknowledgedConversation) GetBestLinkableTs() string {
+	if a.AcknowledgedThroughTs != "" {
+		return a.AcknowledgedThroughTs
+	}
+
+	return a.LatestMsgTs
+}
+
 type unsupportedVersionError struct {
 	supportedVersion int
 	actualVersion    int
@@ -118,7 +131,7 @@ func ConnectDB(dbPath string) (*SlackBoxDB, error) {
 	return &SlackBoxDB{db}, nil
 }
 
-func (db *SlackBoxDB) GetUnackedConversations() ([]Conversation, error) {
+func (db *SlackBoxDB) GetUnackedConversations() ([]AcknowledgedConversation, error) {
 	sql := `
       with
 
@@ -133,7 +146,8 @@ func (db *SlackBoxDB) GetUnackedConversations() ([]Conversation, error) {
       )
 
       select
-        c.id, c.conversation_type, c.display_name, c.latest_msg_ts
+        c.id, c.conversation_type, c.display_name, c.latest_msg_ts,
+        coalesce(a.acknowledged_through_ts, '')
       from
         conversations c left outer join latest_acknowledgements a
         on c.id = a.conversation_id
@@ -149,7 +163,7 @@ func (db *SlackBoxDB) GetUnackedConversations() ([]Conversation, error) {
         c.id asc
     `
 
-	conversations := make([]Conversation, 0)
+	conversations := make([]AcknowledgedConversation, 0)
 
 	rows, err := db.db.Query(sql)
 	if err != nil {
@@ -159,8 +173,8 @@ func (db *SlackBoxDB) GetUnackedConversations() ([]Conversation, error) {
 	defer rows.Close()
 
 	for rows.Next() {
-		c := Conversation{}
-		err = rows.Scan(&c.ID, &c.ConversationType, &c.DisplayName, &c.LatestMsgTs)
+		c := AcknowledgedConversation{}
+		err = rows.Scan(&c.ID, &c.ConversationType, &c.DisplayName, &c.LatestMsgTs, &c.AcknowledgedThroughTs)
 		if err != nil {
 			return conversations, err
 		}

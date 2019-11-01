@@ -23,6 +23,11 @@ func ConnectAPI(token string) (*SlackBoxAPI, error) {
 	return &SlackBoxAPI{api}, err
 }
 
+func (api *SlackBoxAPI) FetchConversationLink(id string, ts string) (string, error) {
+	params := &slack.PermalinkParameters{Channel: id, Ts: ts}
+	return api.client.GetPermalink(params)
+}
+
 func (api *SlackBoxAPI) recursiveFetchConversations(types []string) ([]slack.Channel, error) {
 	ims := make([]slack.Channel, 0)
 	params := &slack.GetConversationsParameters{Types: types}

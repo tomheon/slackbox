@@ -72,6 +72,10 @@ func main() {
 	}
 
 	for _, c := range unackedConversations {
-		fmt.Println(c)
+		link, err := api.FetchConversationLink(c.ID, c.GetBestLinkableTs())
+		if err != nil {
+			link = fmt.Sprintf("%s", err)
+		}
+		fmt.Println(c, link)
 	}
 }
