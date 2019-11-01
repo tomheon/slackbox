@@ -160,4 +160,27 @@ func TestUpdateConversationSame(t *testing.T) {
 	testNoUpdate(t, "1.000", "1.000")
 }
 
-// TODO test updateconversations
+func TestUpdateConversations(t *testing.T) {
+	// just test that UpdateConversations works at a basic level, as it defers
+	// to UpdateConversation
+	db := memoryDB(t)
+
+	c := Conversation{ID: "someconvo", ConversationType: "im", DisplayName: "display", LatestMsgTs: "1.0000"}
+	c2 := Conversation{ID: "someconvo", ConversationType: "im", DisplayName: "display", LatestMsgTs: "1.0000"}
+
+	err := db.UpdateConversations([]Conversation{c, c2})
+	if err != nil {
+		t.Errorf("UpdateConversations failed with error %s", err)
+	}
+	foundC := checkGet(t, db, c.ID)
+
+	if !reflect.DeepEqual(c, foundC) {
+		t.Errorf("Expected to find conversation %s, found %s", c, foundC)
+	}
+
+	foundC2 := checkGet(t, db, c2.ID)
+
+	if !reflect.DeepEqual(c2, foundC2) {
+		t.Errorf("Expected to find conversation %s, found %s", c2, foundC2)
+	}
+}
