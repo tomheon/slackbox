@@ -118,6 +118,63 @@ func ConnectDB(dbPath string) (*SlackBoxDB, error) {
 	return &SlackBoxDB{db}, nil
 }
 
+func (db *SlackBoxDB) GetUnackedConversations() ([]Conversation, error) {
+	sql := `
+      with
+
+      latest_acknowledgements as (
+        select
+          conversation_id,
+          max(acknowledged_through_ts) as acknowledged_through_ts
+        from
+          acknowledgements
+        group by
+          conversation_id
+      )
+
+      select
+        c.id, c.conversation_type, c.display_name, c.latest_msg_ts
+      from
+        conversations c left outer join latest_acknowledgements a
+        on c.id = a.conversation_id
+      where
+        (c.latest_msg_ts > a.acknowledged_through_ts
+         or a.acknowledged_through_ts is null)
+        -- a blank latest_msg_ts would mean there had never
+        -- been a message in the conversation, so we don't
+        -- care about it
+        and c.latest_msg_ts <> ''
+      order by
+        c.latest_msg_ts desc,
+        c.id asc
+    `
+
+	conversations := make([]Conversation, 0)
+
+	rows, err := db.db.Query(sql)
+	if err != nil {
+		return conversations, err
+	}
+
+	defer rows.Close()
+
+	for rows.Next() {
+		c := Conversation{}
+		err = rows.Scan(&c.ID, &c.ConversationType, &c.DisplayName, &c.LatestMsgTs)
+		if err != nil {
+			return conversations, err
+		}
+
+		conversations = append(conversations, c)
+	}
+
+	if rows.Err() != nil {
+		return conversations, rows.Err()
+	}
+
+	return conversations, nil
+}
+
 func checkSupportedVersion(db *sql.DB) error {
 	initVersionSql := `
       create table if not exists version (

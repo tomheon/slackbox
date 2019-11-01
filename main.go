@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
@@ -63,5 +64,14 @@ func main() {
 	err = db.UpdateConversations(conversations)
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	unackedConversations, err := db.GetUnackedConversations()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	for _, c := range unackedConversations {
+		fmt.Println(c)
 	}
 }
