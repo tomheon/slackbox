@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	// "io"
 	"io/ioutil"
 	"log"
 	"os"
@@ -75,6 +74,7 @@ func createSelectFunc(api *SlackBoxAPI, ac AcknowledgedConversation, list *tview
 		if err == nil {
 			err = browser.OpenURL(link)
 		}
+		// TODO make repeatable modal func
 		if err != nil {
 			modal := tview.NewModal()
 			modal.SetText(fmt.Sprintf("Error: %s", err))
@@ -113,6 +113,16 @@ func unackConversation(unackedConversations []AcknowledgedConversation, db *Slac
 	list.SetItemText(i, fmt.Sprintf("[::b]* %s", uc.DisplayName), "")
 }
 
+func showHelpModal(app *tview.Application, list *tview.List) {
+	modal := tview.NewModal()
+	modal.SetText("Navigate with j/k or arrow keys\nr marks a conversation as read\nu marks a conversation as unread again\nEnter opens the current selection in slack\ng re-fetches conversations from slack\nh or ? brings up this help")
+	modal.AddButtons([]string{"OK"})
+	modal.SetDoneFunc(func(buttonIndex int, buttonLabel string) {
+		app.SetRoot(list, true)
+	})
+	app.SetRoot(modal, false)
+}
+
 func createInputCaptureFunc(unackedConversations []AcknowledgedConversation, api *SlackBoxAPI, db *SlackBoxDB, app *tview.Application, list *tview.List) func(*tcell.EventKey) *tcell.EventKey {
 	return func(event *tcell.EventKey) *tcell.EventKey {
 		key := event.Key()
@@ -132,6 +142,12 @@ func createInputCaptureFunc(unackedConversations []AcknowledgedConversation, api
 				event = tcell.NewEventKey(tcell.KeyDown, ch, event.Modifiers())
 			case 'u':
 				unackConversation(unackedConversations, db, app, list)
+				event = nil
+			case '?':
+				showHelpModal(app, list)
+				event = nil
+			case 'h':
+				showHelpModal(app, list)
 				event = nil
 			case 'q':
 				app.Stop()
@@ -160,6 +176,8 @@ func initList(api *SlackBoxAPI, db *SlackBoxDB, app *tview.Application) {
 	list.SetDoneFunc(func() {
 		app.Stop()
 	})
+	list.SetBorder(true)
+	list.SetTitle("Slackbox v1.0 (? or h for help)")
 
 	list.SetInputCapture(createInputCaptureFunc(unackedConversations, api, db, app, list))
 
