@@ -66,6 +66,16 @@ func updateAndFindUnacked(api *SlackBoxAPI, db *SlackBoxDB) ([]AcknowledgedConve
 	return db.GetUnackedConversations()
 }
 
+func showModal(msg string, app *tview.Application, list *tview.List) {
+	modal := tview.NewModal()
+	modal.SetText(msg)
+	modal.AddButtons([]string{"OK"})
+	modal.SetDoneFunc(func(buttonIndex int, buttonLabel string) {
+		app.SetRoot(list, true)
+	})
+	app.SetRoot(modal, false)
+}
+
 func createSelectFunc(api *SlackBoxAPI, ac AcknowledgedConversation, list *tview.List, app *tview.Application) func() {
 	return func() {
 		ts := ac.GetBestLinkableTs()
@@ -74,54 +84,41 @@ func createSelectFunc(api *SlackBoxAPI, ac AcknowledgedConversation, list *tview
 		if err == nil {
 			err = browser.OpenURL(link)
 		}
-		// TODO make repeatable modal func
 		if err != nil {
-			modal := tview.NewModal()
-			modal.SetText(fmt.Sprintf("Error: %s", err))
-			modal.AddButtons([]string{"OK"})
-			modal.SetDoneFunc(func(buttonIndex int, buttonLabel string) {
-				app.SetRoot(list, true)
-			})
-			app.SetRoot(modal, false)
+			showModal(fmt.Sprintf("%s", err), app, list)
 		}
 	}
 }
 
 func ackConversation(unackedConversations []AcknowledgedConversation, db *SlackBoxDB, app *tview.Application, list *tview.List) {
-	// TODO error modal
 	i := list.GetCurrentItem()
 	uc := unackedConversations[i]
 	id := uc.ID
 	ts := uc.LatestMsgTs
 	err := db.AckConversation(id, ts)
 	if err != nil {
-		log.Fatal(err)
+		showModal(fmt.Sprintf("%s", err), app, list)
+		return
 	}
 	list.SetItemText(i, fmt.Sprintf("  %s", uc.DisplayName), "")
 }
 
 func unackConversation(unackedConversations []AcknowledgedConversation, db *SlackBoxDB, app *tview.Application, list *tview.List) {
-	// TODO error modal
 	i := list.GetCurrentItem()
 	uc := unackedConversations[i]
 	id := uc.ID
 	ts := uc.LatestMsgTs
 	err := db.UnackConversation(id, ts)
 	if err != nil {
-		log.Fatal(err)
+		showModal(fmt.Sprintf("%s", err), app, list)
+		return
 	}
 	list.SetItemText(i, fmt.Sprintf("[::b]* %s", uc.DisplayName), "")
 }
 
 func showHelpModal(app *tview.Application, list *tview.List) {
-	// TODO refactor modal
-	modal := tview.NewModal()
-	modal.SetText("Navigate with j/k or arrow keys\nr marks a conversation as read\nu marks a conversation as unread again\nEnter opens the current selection in slack\ng re-fetches conversations from slack\nh or ? brings up this help")
-	modal.AddButtons([]string{"OK"})
-	modal.SetDoneFunc(func(buttonIndex int, buttonLabel string) {
-		app.SetRoot(list, true)
-	})
-	app.SetRoot(modal, false)
+	help := "Navigate with j/k or arrow keys\nr marks a conversation as read\nu marks a conversation as unread again\nEnter opens the current selection in slack\ng re-fetches conversations from slack\nh or ? brings up this help"
+	showModal(help, app, list)
 }
 
 func createInputCaptureFunc(unackedConversations []AcknowledgedConversation, api *SlackBoxAPI, db *SlackBoxDB, app *tview.Application, list *tview.List) func(*tcell.EventKey) *tcell.EventKey {
@@ -161,17 +158,7 @@ func createInputCaptureFunc(unackedConversations []AcknowledgedConversation, api
 }
 
 func initList(api *SlackBoxAPI, db *SlackBoxDB, app *tview.Application) {
-	unackedConversations, err := updateAndFindUnacked(api, db)
-	if err != nil {
-		// TODO make this an error modal
-		log.Fatalf("%s", err)
-	}
-
 	list := tview.NewList()
-
-	for _, uc := range unackedConversations {
-		list.AddItem(fmt.Sprintf("[::b]* %s", uc.DisplayName), "", 0, createSelectFunc(api, uc, list, app))
-	}
 
 	list.ShowSecondaryText(false)
 	list.SetDoneFunc(func() {
@@ -180,9 +167,18 @@ func initList(api *SlackBoxAPI, db *SlackBoxDB, app *tview.Application) {
 	list.SetBorder(true)
 	list.SetTitle("Slackbox v1.0 (? or h for help)")
 
+	app.SetRoot(list, true)
+
+	unackedConversations, err := updateAndFindUnacked(api, db)
+	if err != nil {
+		showModal(fmt.Sprintf("%s", err), app, list)
+	}
+
 	list.SetInputCapture(createInputCaptureFunc(unackedConversations, api, db, app, list))
 
-	app.SetRoot(list, true)
+	for _, uc := range unackedConversations {
+		list.AddItem(fmt.Sprintf("[::b]* %s", uc.DisplayName), "", 0, createSelectFunc(api, uc, list, app))
+	}
 }
 
 func main() {
