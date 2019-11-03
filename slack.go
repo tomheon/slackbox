@@ -54,7 +54,7 @@ func (api *SlackBoxAPI) recursiveFetchConversations(types []string) ([]slack.Cha
 func (api *SlackBoxAPI) FetchConversations() ([]Conversation, error) {
 	conversations := make([]Conversation, 0)
 
-	ims, err := api.recursiveFetchConversations([]string{"im"})
+	ims, err := api.recursiveFetchConversations([]string{"im", "mpim"})
 
 	if err != nil {
 		return nil, err
