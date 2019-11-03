@@ -130,7 +130,6 @@ func (db *SlackBoxDB) AckConversation(id string, ackTs string) error {
 	return err
 }
 
-// TODO write tests
 func (db *SlackBoxDB) UnackConversation(id string, ackTs string) error {
 	sql := `
       delete from acknowledgements

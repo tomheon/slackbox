@@ -213,10 +213,48 @@ func TestAckingConversation(t *testing.T) {
 	checkUnacked(t, db, []Conversation{c2})
 }
 
+func TestUnackingConversation(t *testing.T) {
+	ts1 := "1.0"
+	ts2 := "2.0"
+
+	c := Conversation{ID: "someconvo", ConversationType: "im", DisplayName: "display", LatestMsgTs: ts1}
+	c2 := Conversation{ID: "someconvo2", ConversationType: "im", DisplayName: "display2", LatestMsgTs: ts1}
+
+	db := memoryDB(t)
+	checkUnacked(t, db, []Conversation{})
+
+	checkUpdate(t, db, c)
+	checkUpdate(t, db, c2)
+	checkUnacked(t, db, []Conversation{c, c2})
+
+	checkAck(t, db, c.ID, ts1)
+	checkUnacked(t, db, []Conversation{c2})
+
+	checkUnack(t, db, c.ID, ts1)
+	checkUnacked(t, db, []Conversation{c, c2})
+
+	checkAck(t, db, c.ID, ts1)
+	checkUnacked(t, db, []Conversation{c2})
+	checkUnack(t, db, c.ID, ts2)
+	checkUnacked(t, db, []Conversation{c2})
+
+	checkAck(t, db, c.ID, ts2)
+	checkUnacked(t, db, []Conversation{c2})
+	checkUnack(t, db, c.ID, ts1)
+	checkUnacked(t, db, []Conversation{c2})
+}
+
 func checkAck(t *testing.T, db *SlackBoxDB, id string, ts string) {
 	err := db.AckConversation(id, ts)
 	if err != nil {
 		t.Errorf("AckConversation failed with error %s", err)
+	}
+}
+
+func checkUnack(t *testing.T, db *SlackBoxDB, id string, ts string) {
+	err := db.UnackConversation(id, ts)
+	if err != nil {
+		t.Errorf("UnackConversation failed with error %s", err)
 	}
 }
 
