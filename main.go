@@ -9,9 +9,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/rivo/tview"
 	"github.com/gdamore/tcell"
 	"github.com/pkg/browser"
+	"github.com/rivo/tview"
 )
 
 func mustHaveToken(tokenPath string) string {
@@ -67,7 +67,7 @@ func updateAndFindUnacked(api *SlackBoxAPI, db *SlackBoxDB) ([]AcknowledgedConve
 	return db.GetUnackedConversations()
 }
 
-func createSelectFunc(api *SlackBoxAPI, ac AcknowledgedConversation, list *tview.List, app *tview.Application) (func()) {
+func createSelectFunc(api *SlackBoxAPI, ac AcknowledgedConversation, list *tview.List, app *tview.Application) func() {
 	return func() {
 		ts := ac.GetBestLinkableTs()
 		id := ac.ID
@@ -87,6 +87,85 @@ func createSelectFunc(api *SlackBoxAPI, ac AcknowledgedConversation, list *tview
 	}
 }
 
+func ackConversation(unackedConversations []AcknowledgedConversation, db *SlackBoxDB, app *tview.Application, list *tview.List) {
+	// TODO error modal
+	i := list.GetCurrentItem()
+	uc := unackedConversations[i]
+	id := uc.ID
+	ts := uc.LatestMsgTs
+	err := db.AckConversation(id, ts)
+	if err != nil {
+		log.Fatal(err)
+	}
+	list.SetItemText(i, fmt.Sprintf("  %s", uc.DisplayName), "")
+}
+
+func unackConversation(unackedConversations []AcknowledgedConversation, db *SlackBoxDB, app *tview.Application, list *tview.List) {
+	// TODO error modal
+	i := list.GetCurrentItem()
+	uc := unackedConversations[i]
+	id := uc.ID
+	ts := uc.LatestMsgTs
+	err := db.UnackConversation(id, ts)
+	if err != nil {
+		log.Fatal(err)
+	}
+	list.SetItemText(i, fmt.Sprintf("[::b]* %s", uc.DisplayName), "")
+}
+
+func createInputCaptureFunc(unackedConversations []AcknowledgedConversation, api *SlackBoxAPI, db *SlackBoxDB, app *tview.Application, list *tview.List) func(*tcell.EventKey) *tcell.EventKey {
+	return func(event *tcell.EventKey) *tcell.EventKey {
+		key := event.Key()
+
+		if key == tcell.KeyRune {
+			ch := event.Rune()
+			switch ch {
+			case 'j':
+				event = tcell.NewEventKey(tcell.KeyDown, ch, event.Modifiers())
+			case 'k':
+				event = tcell.NewEventKey(tcell.KeyUp, ch, event.Modifiers())
+			case 'g':
+				initList(api, db, app)
+				event = nil
+			case 'r':
+				ackConversation(unackedConversations, db, app, list)
+				event = tcell.NewEventKey(tcell.KeyDown, ch, event.Modifiers())
+			case 'u':
+				unackConversation(unackedConversations, db, app, list)
+				event = nil
+			case 'q':
+				app.Stop()
+				event = nil
+			}
+		}
+
+		return event
+	}
+}
+
+func initList(api *SlackBoxAPI, db *SlackBoxDB, app *tview.Application) {
+	unackedConversations, err := updateAndFindUnacked(api, db)
+	if err != nil {
+		// TODO make this an error modal
+		log.Fatalf("%s", err)
+	}
+
+	list := tview.NewList()
+
+	for _, uc := range unackedConversations {
+		list.AddItem(fmt.Sprintf("[::b]* %s", uc.DisplayName), "", 0, createSelectFunc(api, uc, list, app))
+	}
+
+	list.ShowSecondaryText(false)
+	list.SetDoneFunc(func() {
+		app.Stop()
+	})
+
+	list.SetInputCapture(createInputCaptureFunc(unackedConversations, api, db, app, list))
+
+	app.SetRoot(list, true)
+}
+
 func main() {
 	tokenPath := flag.String("tokenpath", "tokenfile.txt", "The path containing your slack token")
 	dbPath := flag.String("dbpath", "slackbox.db", "The path to the message db")
@@ -98,197 +177,9 @@ func main() {
 	db := mustConnectDB(*dbPath)
 
 	app := tview.NewApplication()
-	list := tview.NewList()
-	
-	unackedConversations, err := updateAndFindUnacked(api, db)
-	if err != nil {
-		log.Fatalf("%s", err)
-	}
+	initList(api, db, app)
 
-	for _, uc := range unackedConversations {
-		list.AddItem(fmt.Sprintf("[::b]%s", uc.DisplayName), "", 0, createSelectFunc(api, uc, list, app))
-	}
-
-	list.ShowSecondaryText(false)
-	list.SetDoneFunc(func() {
-		app.Stop()
-	})
-
-	list.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		key := event.Key()
-
-		if key == tcell.KeyRune {
-			ch := event.Rune()
-			switch ch {
-			case 'j':
-				event = tcell.NewEventKey(tcell.KeyDown, ch, event.Modifiers())
-			case 'k':
-				event = tcell.NewEventKey(tcell.KeyUp, ch, event.Modifiers())
-			case 'q':
-				app.Stop()
-				event = nil
-			}
-		}
-		
-		return event
-	})
-	
-	if err := app.SetRoot(list, true).Run(); err != nil {
-		panic(err)
+	if err := app.Run(); err != nil {
+		log.Fatal(err)
 	}
 }
-
-// type RlContext struct {
-// 	unackedConversations []AcknowledgedConversation
-// 	pageSize             int
-// 	curPage              int
-// 	curIdx               int
-// 	acked                map[int]bool
-
-// 	db  *SlackBoxDB
-// 	api *SlackBoxAPI
-// }
-
-// func rlLoop(api *SlackBoxAPI, db *SlackBoxDB) error {
-// 	rl, err := readline.New("\033[31m»\033[0m ")
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	unackedConversations, err := updateAndFindUnacked(api, db)
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	rlContext := &RlContext{db: db, api: api, unackedConversations: unackedConversations, curPage: 0, curIdx: 0, pageSize: 2, acked: make(map[int]bool)}
-
-// 	defer rl.Close()
-
-// 	err = doList(rlContext)
-
-// 	for {
-// 		line, rlerr := rl.Readline()
-// 		if rlerr == readline.ErrInterrupt {
-// 			if len(line) == 0 {
-// 				break
-// 			} else {
-// 				continue
-// 			}
-// 		} else if rlerr == io.EOF {
-// 			break
-// 		}
-
-// 		line = strings.TrimSpace(line)
-
-// 		switch {
-// 		case strings.HasPrefix(line, "l"):
-// 			err = doList(rlContext)
-// 		case strings.HasPrefix(line, "g"):
-// 			err = doGo(rlContext, -1)
-// 		case strings.HasPrefix(line, "a"):
-// 			err = doAck(rlContext, -1)
-// 		}
-
-// 		if err != nil {
-// 			return err
-// 		}
-
-// 		rl.Refresh()
-// 	}
-
-// 	return nil
-// }
-
-// func doGo(rlContext *RlContext, userSel int) error {
-// 	uc := rlContext.GetCurrentConveration()
-// 	ts := uc.GetBestLinkableTs()
-// 	id := uc.ID
-// 	link, err := rlContext.api.FetchConversationLink(id, ts)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	return browser.OpenURL(link)
-// }
-
-// func doAck(rlContext *RlContext, userSel int) error {
-// 	uc := rlContext.GetCurrentConveration()
-// 	id := uc.ID
-// 	ts := uc.LatestMsgTs
-
-// 	err := rlContext.db.AckConversation(id, ts)
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	rlContext.MarkAcked(rlContext.curIdx)
-// 	err = doNext(rlContext)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	err = doList(rlContext)
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	return nil
-// }
-
-// func doNext(rlContext *RlContext) error {
-// 	rlContext.Next()
-// 	return nil
-// }
-
-// func (rlContext *RlContext) Next() {
-// 	_, endPageIdx := rlContext.CalcPageIdxs()
-// 	if rlContext.curIdx+1 >= endPageIdx {
-// 		rlContext.NextPage()
-// 	} else {
-// 		rlContext.curIdx++
-// 	}
-// }
-
-// func (rlContext *RlContext) NextPage() {
-// 	startPageIdx, endPageIdx := rlContext.CalcPageIdxs()
-// 	if endPageIdx < len(rlContext.unackedConversations) {
-// 		rlContext.curPage++
-// 		startPageIdx, _ = rlContext.CalcPageIdxs()
-// 		rlContext.curIdx = startPageIdx
-// 	}
-// }
-
-// func (rlContext *RlContext) MarkAcked(idx int) {
-// 	rlContext.acked[idx] = true
-// }
-
-// func (rlContext *RlContext) CalcPageIdxs() (int, int) {
-// 	startPageIdx := rlContext.curPage * rlContext.pageSize
-// 	endPageIdx := startPageIdx + rlContext.pageSize
-// 	if endPageIdx >= len(rlContext.unackedConversations) {
-// 		endPageIdx = len(rlContext.unackedConversations)
-// 	}
-
-// 	return startPageIdx, endPageIdx
-// }
-
-// func (rlContext *RlContext) GetCurrentConveration() AcknowledgedConversation {
-// 	return rlContext.unackedConversations[rlContext.curIdx]
-// }
-
-// func doList(rlContext *RlContext) error {
-// 	startPageIdx, endPageIdx := rlContext.CalcPageIdxs()
-
-// 	for i, uc := range rlContext.unackedConversations[startPageIdx:endPageIdx] {
-// 		unacked := " + "
-// 		_, ok := rlContext.acked[startPageIdx+i]
-// 		if ok {
-// 			unacked = "   "
-// 		}
-// 		curSel := " "
-// 		if rlContext.curIdx == startPageIdx+i {
-// 			curSel = "*"
-// 		}
-// 		fmt.Printf("%d: %s%s%s\n", i+1, curSel, unacked, uc.DisplayName)
-// 	}
-
-// 	return nil
-// }

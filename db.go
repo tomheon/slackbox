@@ -130,6 +130,16 @@ func (db *SlackBoxDB) AckConversation(id string, ackTs string) error {
 	return err
 }
 
+// TODO write tests
+func (db *SlackBoxDB) UnackConversation(id string, ackTs string) error {
+	sql := `
+      delete from acknowledgements
+      where conversation_id = ? and acknowledged_through_ts = ?
+    `
+	_, err := db.db.Exec(sql, id, ackTs)
+	return err
+}
+
 func ConnectDB(dbPath string) (*SlackBoxDB, error) {
 	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
