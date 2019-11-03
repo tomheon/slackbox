@@ -114,6 +114,7 @@ func unackConversation(unackedConversations []AcknowledgedConversation, db *Slac
 }
 
 func showHelpModal(app *tview.Application, list *tview.List) {
+	// TODO refactor modal
 	modal := tview.NewModal()
 	modal.SetText("Navigate with j/k or arrow keys\nr marks a conversation as read\nu marks a conversation as unread again\nEnter opens the current selection in slack\ng re-fetches conversations from slack\nh or ? brings up this help")
 	modal.AddButtons([]string{"OK"})
@@ -189,7 +190,6 @@ func main() {
 	dbPath := flag.String("dbpath", "slackbox.db", "The path to the message db")
 	flag.Parse()
 
-	// TODO see if we can check perms on api, reject if we have too many
 	token := mustHaveToken(*tokenPath)
 	api := mustConnectAPI(token)
 	db := mustConnectDB(*dbPath)
