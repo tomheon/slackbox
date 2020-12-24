@@ -172,7 +172,7 @@ func initList(api *SlackBoxAPI, db *SlackBoxDB, app *tview.Application) {
 		app.Stop()
 	})
 	list.SetBorder(true)
-	list.SetTitle("Slackbox v1.0 (? or h for help)")
+	list.SetTitle(fmt.Sprintf("%s (? or h for help)", api.TeamName()))
 
 	app.SetRoot(list, true)
 

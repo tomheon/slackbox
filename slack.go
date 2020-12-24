@@ -5,7 +5,8 @@ import (
 )
 
 type SlackBoxAPI struct {
-	client *slack.Client
+	client   *slack.Client
+	teamName string
 }
 
 type Conversation struct {
@@ -19,8 +20,16 @@ func ConnectAPI(token string) (*SlackBoxAPI, error) {
 	api := slack.New(token)
 
 	_, err := api.AuthTest()
+	if err != nil {
+		return nil, err
+	}
 
-	return &SlackBoxAPI{api}, err
+	teamInfo, err := api.GetTeamInfo()
+	if err != nil {
+		return nil, err
+	}
+
+	return &SlackBoxAPI{api, teamInfo.Name}, err
 }
 
 func (api *SlackBoxAPI) FetchConversationLink(id string, ts string) (string, error) {
@@ -78,6 +87,10 @@ func (api *SlackBoxAPI) fetchUserName(imUser string) (string, error) {
 		return "", err
 	}
 	return user.RealName, nil
+}
+
+func (api *SlackBoxAPI) TeamName() string {
+	return api.teamName
 }
 
 func (api *SlackBoxAPI) imToConversation(imID string, imUser string) (Conversation, error) {
