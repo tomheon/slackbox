@@ -51,6 +51,13 @@ func mustConnectDB(dbPath string) *SlackBoxDB {
 	return db
 }
 
+func silenceBrowserOutput() {
+	// Without this, the screen can get cluttered up with warning messages from
+	// the browser, which are rampant in Chrome.
+	browser.Stderr = ioutil.Discard
+	browser.Stdout = ioutil.Discard
+}
+
 func updateAndFindUnacked(api *SlackBoxAPI, db *SlackBoxDB) ([]AcknowledgedConversation, error) {
 	unacked := make([]AcknowledgedConversation, 0)
 
@@ -189,6 +196,8 @@ func main() {
 	token := mustHaveToken(*tokenPath)
 	api := mustConnectAPI(token)
 	db := mustConnectDB(*dbPath)
+
+	silenceBrowserOutput()
 
 	app := tview.NewApplication()
 	initList(api, db, app)
